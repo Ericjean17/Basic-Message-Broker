@@ -5,10 +5,10 @@ namespace MessageBroker.Models
   public class Message
   {
     [Key]
-    public int MyProperty { get; set; }
+    public int Id { get; set; }
 
     [Required]
-    public string? TopicMessage { get; set; }
+    public string? TopicMessage { get; set; } // ? indicates that it might be null
 
     public int SubscriptionId { get; set; }
 
