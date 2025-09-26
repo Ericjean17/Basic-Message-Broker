@@ -82,20 +82,50 @@ app.MapPost("api/topics/{id}/subscriptions", async (AppDbContext context, int id
 // Get Subscriber Messages
 app.MapGet("api/subscriptions/{id}/messages", async (AppDbContext context, int id) =>
 {
+    // Check if subscription exists and return 404 if it doesn't
     bool subs = await context.Subscriptions.AnyAsync(s => s.Id == id);
     if (!subs) return Results.NotFound("Subscription not found");
 
-    // Don't want to give messages to subscribers that already have been sent to them, only new
+    // Get messages for this subscription that are not already "SENT", and only gets "NEW" messages
     var messages = context.Messages.Where(m => m.SubscriptionId == id && m.MessageStatus != "SENT");
     if (messages.Count() == 0) return Results.NotFound("No new messages");
 
+    // Changes all retrieved messages status that are "NEW" to "REQUESTED"
+    // This means subscriber has now requested these messages
     foreach (var msg in messages)
     {
         msg.MessageStatus = "REQUESTED";
     }
+    await context.SaveChangesAsync();
     return Results.Ok(messages);
 });
 
+// Acknowledge subscribers processed messages
+app.MapPost("api/subscriptions/{id}/messages", async (AppDbContext context, int id, int[] confs) =>
+{
+    bool subs = await context.Subscriptions.AnyAsync(s => s.Id == id);
+    if (!subs) return Results.NotFound("Subscription not found");
+
+    // Return 400 status if no message IDs provided
+    if (confs.Length <= 0) return Results.BadRequest();
+
+    // Loop through each message ID in the array and find the message by ID
+    // If message exists, mark it as "SENT" from "REQUESTED" and save to database
+    // Counts all successful acknowledgments
+    int count = 0;
+    foreach (int i in confs)
+    {
+        var msg = context.Messages.FirstOrDefault(m => m.Id == i);
+
+        if (msg != null)
+        {
+            msg.MessageStatus = "SENT";
+            await context.SaveChangesAsync();
+            count++;
+        }
+    }
+    return Results.Ok($"Acknowledged {count}/{confs.Length} messages");
+});
 
 app.Run();
 
